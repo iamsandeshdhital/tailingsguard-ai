@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  tailingsguard:
+    build: .
+    container_name: tailingsguard-ai
+    ports:
+      - "8050:8050"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Grafana for advanced visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: tailingsguard-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    restart: unless-stopped
+    depends_on:
+      - tailingsguard
+
+volumes:
+  grafana-storage:

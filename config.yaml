@@ -1,0 +1,138 @@
+# TailingsGuard AI Configuration
+# ==============================
+
+app:
+  name: "TailingsGuard AI"
+  version: "1.0.0"
+  debug: true
+  host: "0.0.0.0"
+  port: 8050
+
+# Dam Configuration
+dam:
+  name: "Default Tailings Storage Facility"
+  type: "upstream"  # upstream, downstream, centerline, cross-valley
+  height_m: 45
+  crest_length_m: 800
+  crest_width_m: 15
+  storage_capacity_m3: 5000000
+  max_pond_area_m2: 200000
+  beach_length_min_m: 50  # Minimum beach length for safety
+  freeboard_min_m: 1.5    # Minimum freeboard (distance from crest to pond)
+  phreatic_line_max: 0.7  # Max phreatic surface as fraction of dam height
+
+# Sensor Configuration
+sensors:
+  # Piezometers (pore water pressure) - CRITICAL for failure prediction
+  piezometers:
+    enabled: true
+    count: 12
+    locations: ["crest", "downstream_slope", "foundation", "toe"]
+    alarm_threshold_kpa: 150
+    critical_threshold_kpa: 200
+
+  # Inclinometers (slope movement)
+  inclinometers:
+    enabled: true
+    count: 6
+    alarm_threshold_mm_per_day: 5
+    critical_threshold_mm_per_day: 20
+
+  # Settlement Plates
+  settlement:
+    enabled: true
+    count: 8
+    alarm_threshold_mm: 50
+    critical_threshold_mm: 100
+
+  # Water Level Sensors (pond level)
+  water_level:
+    enabled: true
+    alarm_threshold_m_below_crest: 2.0
+    critical_threshold_m_below_crest: 1.0
+
+  # Seismic Sensors
+  seismic:
+    enabled: true
+    alarm_threshold_magnitude: 2.0
+
+  # Weather Station
+  weather:
+    enabled: true
+    rain_alarm_mm_per_day: 50
+    rain_critical_mm_per_day: 100
+
+  # Drone / Satellite InSAR (surface deformation)
+  insar:
+    enabled: true
+    provider: "sentinel-1"
+    update_frequency_days: 6
+    alarm_threshold_mm_per_month: 10
+
+# ML Models
+models:
+  failure_predictor:
+    type: "GradientBoosting"
+    n_estimators: 500
+    learning_rate: 0.05
+    model_path: "models/failure_predictor.pkl"
+    prediction_horizon_hours: 72
+
+  anomaly_detector:
+    type: "IsolationForest"
+    contamination: 0.05
+    model_path: "models/anomaly_detector.pkl"
+
+  time_series_forecaster:
+    type: "Prophet"
+    model_path: "models/forecaster.pkl"
+
+# Alert Configuration
+alerts:
+  enabled: true
+  channels:
+    - "dashboard"
+    - "email"
+    - "sms"
+    - "siren"
+  recipients:
+    - name: "Mine Manager"
+      email: "manager@mine.com"
+      phone: "+1234567890"
+    - name: "Safety Officer"
+      email: "safety@mine.com"
+      phone: "+1234567891"
+    - name: "Regulator"
+      email: "regulator@.gov.com"
+  escalation_minutes: 15
+
+# Safety Thresholds (based on ICOLD guidelines)
+safety:
+  # Factor of Safety thresholds
+  fs_minimum: 1.5
+  fs_warning: 1.3
+  fs_critical: 1.1
+
+  # Phreatic surface thresholds
+  phreatic_max_ratio: 0.7
+
+  # Pond distance from crest
+  min_beach_width_m: 50
+
+  # Movement thresholds
+  max_creep_rate_mm_per_day: 5
+  max_acceleration_mm_per_day2: 2
+
+# Dashboard
+dashboard:
+  refresh_rate_seconds: 10
+  map_enabled: true
+  historical_days: 90
+  show_sensor_locations: true
+
+# Database
+database:
+  type: "sqlite"
+  path: "data/tailingsguard.db"
+  backup_interval_hours: 12
+  retention_days: 365
