@@ -4,15 +4,6 @@ TailingsGuard AI - Tailings Dam Failure Prediction System
 Predicts catastrophic tailings dam failures before they happen,
 saving lives, preventing environmental disasters, and protecting mining companies.
 
-Includes comprehensive risk mitigation:
-- Explainable AI (trust)
-- Sensor health monitoring (reliability)
-- Adaptive alerts (false alarm prevention)
-- Data validation (garbage prevention)
-- Model drift detection (accuracy over time)
-- Integration gateway (SCADA connectivity)
-- Human-in-the-loop (liability protection)
-
 Usage:
     python tailingsguard.py              # Start with simulation
     python tailingsguard.py --demo       # Run demo with failure scenario
@@ -38,17 +29,10 @@ from core.alert_system import AlertSystem, AlertLevel
 from core.dashboard import Dashboard
 from core.data_logger import DataLogger
 from core.simulator import SensorSimulator
-from core.explainability import ExplainabilityEngine
-from core.sensor_health import SensorHealthMonitor
-from core.adaptive_alerts import AdaptiveAlertSystem
-from core.data_validator import DataValidator
-from core.model_drift import ModelDriftDetector
-from core.integration_gateway import IntegrationGateway, ConnectionConfig, ProtocolType
-from core.human_in_loop import HumanInLoop
 
 
 class TailingsGuard:
-    """Main TailingsGuard AI application with full risk mitigation."""
+    """Main TailingsGuard AI application."""
 
     def __init__(self, config_path: str = "config.yaml"):
         self.config = self._load_config(config_path)
@@ -57,27 +41,16 @@ class TailingsGuard:
 
         # Initialize modules
         print("=" * 60)
-        print("  TailingsGuard AI v2.0")
+        print("  TailingsGuard AI v1.0")
         print("  Tailings Dam Failure Prediction System")
-        print("  With Full Risk Mitigation")
         print("=" * 60)
 
-        # Core modules
         self.sensor_fusion = SensorFusion(self.config)
         self.failure_predictor = FailurePredictor(self.config)
         self.alert_system = AlertSystem(self.config)
         self.dashboard = Dashboard(self.config)
         self.data_logger = DataLogger(self.config)
         self.simulator = SensorSimulator(self.config)
-
-        # Risk mitigation modules
-        self.explainability = ExplainabilityEngine(self.config)
-        self.sensor_health = SensorHealthMonitor(self.config)
-        self.adaptive_alerts = AdaptiveAlertSystem(self.config)
-        self.data_validator = DataValidator(self.config)
-        self.model_drift = ModelDriftDetector(self.config)
-        self.integration = IntegrationGateway(self.config)
-        self.human_in_loop = HumanInLoop(self.config)
 
         # Statistics
         self.scan_count = 0
@@ -124,15 +97,6 @@ class TailingsGuard:
         self.data_logger.start()
         self.simulator.start()
 
-        # Start risk mitigation modules
-        self.explainability.start()
-        self.sensor_health.start()
-        self.adaptive_alerts.start()
-        self.data_validator.start()
-        self.model_drift.start()
-        self.integration.start()
-        self.human_in_loop.start()
-
         # Register signal handlers
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
@@ -163,9 +127,10 @@ class TailingsGuard:
         # 1. Get sensor readings
         readings = self.simulator.get_readings()
 
-        # 2. Validate data quality
-        validated_readings = []
+        # 2. Feed data to sensor fusion
+        sensor_data = {}
         for sensor_id, value in readings.items():
+            # Determine sensor type from ID
             if "piezo" in sensor_id:
                 sensor_type = "piezometer"
             elif "inclin" in sensor_id:
@@ -179,20 +144,8 @@ class TailingsGuard:
             else:
                 sensor_type = "unknown"
 
-            # Validate reading
-            validation = self.data_validator.validate_reading(sensor_id, sensor_type, value)
-            if validation.is_valid or validation.corrected_value is not None:
-                final_value = validation.corrected_value if validation.corrected_value is not None else value
-                validated_readings.append((sensor_id, sensor_type, final_value, time.time()))
-
-                # Update sensor health
-                self.sensor_health.update_reading(sensor_id, final_value)
-
-        # 3. Feed validated data to sensor fusion
-        sensor_data = {}
-        for sensor_id, sensor_type, value, timestamp in validated_readings:
             reading = SensorReading(
-                timestamp=timestamp,
+                timestamp=time.time(),
                 sensor_id=sensor_id,
                 sensor_type=sensor_type,
                 value=value,
@@ -201,55 +154,34 @@ class TailingsGuard:
             )
             self.sensor_fusion.add_reading(reading)
 
+            # Group by type for prediction
             if sensor_type not in sensor_data:
                 sensor_data[sensor_type] = []
             sensor_data[sensor_type].append(value)
 
             # Log to database
-            self.data_logger.log_sensor_reading(sensor_id, sensor_type, value)
+            self.data_logger.log_sensor_reading(
+                sensor_id, sensor_type, value, "", ""
+            )
 
-        # 4. Calculate health index
+        # 3. Calculate health index
         health = self.sensor_fusion.calculate_health_index()
         self.dashboard.update_health(health)
         self.data_logger.log_health_index(health)
 
-        # 5. Run failure prediction
+        # 4. Run failure prediction
         prediction = self.failure_predictor.predict(sensor_data)
         self.predictions_made += 1
         self.data_logger.log_prediction(prediction)
 
-        # 6. Record prediction for drift detection
-        self.model_drift.record_prediction(prediction.probability, {
-            "piezometer": max(sensor_data.get("piezometer", [0])),
-            "inclinometer": max(sensor_data.get("inclinometer", [0])),
-            "water_level": max(sensor_data.get("water_level", [0])),
-        })
+        # 5. Check for alerts
+        self._check_alerts(health, prediction)
 
-        # 7. Generate explanation
-        explanation = self.explainability.explain_prediction(prediction, health, sensor_data)
-
-        # 8. Check for alerts (using adaptive thresholds)
-        self._check_alerts(health, prediction, explanation)
-
-        # 9. Check model drift
-        drift_report = self.model_drift.check_drift()
-        if drift_report.drift_detected:
-            print(f"[MODEL DRIFT] {drift_report.recommendation}")
-
-        # 10. Check sensor health
-        health_report = self.sensor_health.get_health_report()
-        if health_report.overall_quality < 0.7:
-            print(f"[SENSOR HEALTH] Quality: {health_report.overall_quality:.0%} - {len(health_report.issues)} issues")
-
-        # 11. Check for timed-out human decisions
-        self.human_in_loop.check_timeouts()
-
-        # 12. Update dashboard
+        # 6. Update dashboard
         if self.scan_count % 6 == 0:  # Every ~60 seconds
             self.dashboard.display_console()
-            self.explainability.display_explanation(explanation)
 
-    def _check_alerts(self, health, prediction, explanation):
+    def _check_alerts(self, health, prediction):
         """Check and generate alerts based on health and prediction."""
         # Health-based alerts
         if health.risk_level == "critical":
@@ -281,12 +213,6 @@ class TailingsGuard:
                 "IMMINENT FAILURE PREDICTED",
                 f"Probability: {prediction.probability:.1%}. Time to failure: {prediction.time_to_failure_hours}h",
                 "FailurePredictor"
-            )
-            # Request human decision for evacuation
-            self.human_in_loop.request_decision(
-                "evacuate",
-                f"Failure probability {prediction.probability:.1%}",
-                "critical"
             )
         elif prediction.probability > 0.7:
             self._create_alert(
@@ -333,15 +259,6 @@ class TailingsGuard:
         self.data_logger.stop()
         self.simulator.stop()
 
-        # Stop risk mitigation modules
-        self.explainability.stop()
-        self.sensor_health.stop()
-        self.adaptive_alerts.stop()
-        self.data_validator.stop()
-        self.model_drift.stop()
-        self.integration.stop()
-        self.human_in_loop.stop()
-
         # Final summary
         uptime = time.time() - self.start_time if self.start_time else 0
         print("\n" + "=" * 60)
@@ -351,17 +268,6 @@ class TailingsGuard:
         print(f"  Scans completed:   {self.scan_count}")
         print(f"  Predictions made:  {self.predictions_made}")
         print(f"  Alerts triggered:  {self.alerts_triggered}")
-
-        # Risk mitigation stats
-        validation_stats = self.data_validator.get_validation_stats()
-        print(f"  Data validation:   {validation_stats['accuracy']:.1%} accuracy")
-
-        drift_stats = self.model_drift.get_model_performance()
-        if "f1_score" in drift_stats:
-            print(f"  Model F1 score:    {drift_stats['f1_score']:.2f}")
-
-        decision_stats = self.human_in_loop.get_statistics()
-        print(f"  Human decisions:   {decision_stats['total_decisions']} total")
 
         # Export compliance report
         report_path = self.data_logger.export_compliance_report(days=1)
